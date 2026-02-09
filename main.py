@@ -50,6 +50,9 @@ bot = commands.Bot(command_prefix='!', intents=intents)
 # Global set to track raffles that have been cancelled
 cancelled_raffles: Set[int] = set()
 
+# NEW: Track the last winner's ID to prevent streaks
+last_winner_id: int = None
+
 # ============================================================================
 # UTILITY FUNCTIONS
 # ============================================================================
@@ -239,8 +242,24 @@ async def roll(ctx: commands.Context, item_name: str, seconds: int, target_role:
         except discord.NotFound:
             pass
     else:
-        # Select and announce winner
-        winner_id = random.choice(list(view.participants))
+        # --- NEW FAIRNESS LOGIC ---
+        global last_winner_id
+        
+        # Create a list of potential winners
+        pool = list(view.participants)
+
+        # If the previous winner is in the list, and there are other people too...
+        if last_winner_id in pool and len(pool) > 1:
+            pool.remove(last_winner_id) # Remove them from this draw
+            print(f"Removed previous winner {last_winner_id} from pool to prevent streak.")
+
+        # Select winner from the remaining pool
+        winner_id = random.choice(pool)
+        
+        # Update the last winner for next time
+        last_winner_id = winner_id
+        # ---------------------------
+
         winner = await bot.fetch_user(winner_id)
 
         save_log(item_name, winner.name, target_role)
